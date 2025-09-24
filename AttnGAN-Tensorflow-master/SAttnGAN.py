@@ -1,6 +1,7 @@
 from utils import *
 import time
-from tensorflow.python.data.experimental import prefetch_to_device, shuffle_and_repeat, map_and_batch # >= tf 1.15
+import tensorflow as tf
+from tensorflow.data import AUTOTUNE
 from networks import *
 
 class AttnGAN():
@@ -102,14 +103,15 @@ class AttnGAN():
         if self.phase == 'train' :
             self.dataset_num = len(train_images)
 
-            img_and_caption = tf.data.Dataset.from_tensor_slices((train_images, train_captions, train_class_id))
-
-            gpu_device = '/gpu:0'
-            img_and_caption = img_and_caption.apply(shuffle_and_repeat(self.dataset_num)).apply(
-                map_and_batch(img_data_class.image_processing, batch_size=self.batch_size, num_parallel_batches=16,
-                              drop_remainder=True)).apply(prefetch_to_device(gpu_device, None))
-
+            img_and_caption = (tf.data.Dataset.from_tensor_slices((train_images, train_captions, train_class_id))
+                               .shuffle(self.dataset_num)
+                               .repeat()
+                               .map(img_data_class.image_processing, num_parallel_calls=AUTOTUNE)
+                               .batch(self.batch_size, drop_remainder=True)
+                               .prefetch(2)
+                              )
             self.img_caption_iter = iter(img_and_caption)
+
             # real_img_256, caption = iter(img_and_caption)
 
             """ Network """
@@ -159,15 +161,13 @@ class AttnGAN():
             """ Test """
             self.dataset_num = len(test_captions)
 
-            gpu_device = '/gpu:0'
-            img_and_caption = tf.data.Dataset.from_tensor_slices((test_images, test_captions))
-
-            img_and_caption = img_and_caption.apply(
-                shuffle_and_repeat(self.dataset_num)).apply(
-                map_and_batch(img_data_class.image_processing, batch_size=self.batch_size, num_parallel_batches=16, drop_remainder=True)).apply(
-                prefetch_to_device(gpu_device, None))
-
+            img_and_caption = (tf.data.Dataset.from_tensor_slices((test_images, test_captions))
+                               .map(img_data_class.image_processing, num_parallel_calls=AUTOTUNE)
+                               .batch(self.batch_size, drop_remainder=False)
+                               .prefetch(2)
+                              )
             self.img_caption_iter = iter(img_and_caption)
+
 
             """ Network """
             self.rnn_encoder = RnnEncoder(n_words=self.vocab_size, embed_dim=self.embed_dim,
