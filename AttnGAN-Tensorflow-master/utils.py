@@ -1,4 +1,6 @@
 import tensorflow as tf
+tf.compat.v1.disable_v2_behavior()
+tf.compat.v1.disable_eager_execution()
 import random
 import os
 import numpy as np
